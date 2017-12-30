@@ -93,20 +93,21 @@ Ext.define("MainPanel", {
             text: "Memory Util", handler: "MemoryUtil"
         }, {
             text: "login",
-            menu: [{
-                text: '阿德啊', value: 1, handler: "loginPanel"
-            },
-            {
-                text: '阿德呃呃', value: 2, handler: "loginPanel"
-            }, {
-                text: '新手区网通', value: 3, handler: "loginPanel"
-            }, {
-                text: '新手区电信', value: 4, handler: "loginPanel"
-            }
+            menu: [
             ]
+        }, {
+            text: '阿德啊', value: 1, handler: "loginPanel"
+        },
+        {
+            text: '阿德呃呃', value: 2, handler: "loginPanel"
+        }, {
+            text: '新手区网通', value: 3, handler: "loginPanel"
+        }, {
+            text: '新手区电信', value: 4, handler: "loginPanel"
         }
     ]
 })
+
 
 Ext.define("ByteCompare", {
     extend: "Ext.panel.Panel",
@@ -119,6 +120,7 @@ Ext.define("ByteCompare", {
     viewModel: {
         data: {
             basePoint: "12345",
+            searchvalue: "",
             readLengh: 20,
             describe: "describe",
             bytes: "DC EF CC 04 D8 F1 8C 04 15 28 00 00 00 00 00 00 90 A8 8D 07 95 5C 26 73 5A 0C 41 14 98 2E 0D 18 28 B0 8E 07 03 00 04 00 01 00 07 00 02 00 08 00 00 00 03 DE 01 00 00 00 E9 FF FF FF DB FF FF FF 20 00 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 99 02 00 00 D9 08 00 00"
@@ -149,7 +151,6 @@ Ext.define("ByteCompare", {
                 return;
             }
             bps[0].items.items.forEach(function (item, index) {
-
                 bps.forEach(function (bp) {
                     if (bp.items.items[index].config.html != item.config.html) {
                         changeColor(bps, index, "red")
@@ -164,11 +165,19 @@ Ext.define("ByteCompare", {
                 })
             }
         },
-        readMemory:function(){
-            this.view.viewModel.data.basePoint;
-            this.view.viewModel.data.readLengh;
-            this.view.viewModel.data.set("bytes");
-            //bytes
+        readMemory: function () {
+            var basePoint = this.view.viewModel.data.basePoint;
+            var readLengh = this.view.viewModel.data.readLengh;
+            var arr = windowsapi.readProcessMemory(null, basePoint, readLengh);
+            arr = arr.map(function (v, index) {
+                return Number(v).toString(16)
+            })
+            this.view.viewModel.set("bytes", arr.join(" "));
+        },
+        search: function () {
+            var searchvalue = this.view.viewModel.data.searchvalue;
+            
+            windowsapi.SearchInt(null, 0x5FEF8DC, 0, 0, function (v) { console.log(Number(v).toString(16)) })
         }
     },
     items: [
@@ -176,18 +185,30 @@ Ext.define("ByteCompare", {
             xtype: "form",
             items: [
                 {
+                    fieldLabel: "search value",
                     xtype: "textfield",
+                    bind: "{searchvalue}"
+                },
+                {
+                    xtype: "button",
+                    text: "search",
+                    handler: "searchMemory"
+                },
+                {
                     fieldLabel: "basePoint",
+                    xtype: "combo",
+                    store: [],
                     bind: "{basePoint}"
                 },
                 {
-                    xtype:"numberfield",
-                    fieldLabel:"Read Length",
-                    bind:"{readLengh}"
+                    xtype: "numberfield",
+                    fieldLabel: "Read Length",
+                    bind: "{readLengh}"
                 },
                 {
-                    xtype:"button",
-                    handler:"readMemory"
+                    xtype: "button",
+                    text: "read memory",
+                    handler: "readMemory"
                 },
                 {
                     xtype: "textfield",
@@ -298,6 +319,7 @@ Ext.define("MemoryUtilPanel", {
         data: {
             processname: "FTGMOS.exe",
             windowhandle: "",
+            pid: "",
             BaseAddress: localStorage.getItem("BaseAddress"),
             usetime: 0,
             LoopStep: 4,
@@ -315,6 +337,7 @@ Ext.define("MemoryUtilPanel", {
             var viewModel = this.view.viewModel;
 
             setInterval(function () {
+                return;
                 var store = viewModel.get("MemoryStore")
                 var hwnd = viewModel.get("windowhandle");
                 var lpBaseAddress;
@@ -324,6 +347,7 @@ Ext.define("MemoryUtilPanel", {
                     model = store.data.items[i];
                     lpBaseAddress = model.data.address;
                     var num = windowsapi.readProcessMemory(hwnd, lpBaseAddress, nSize)
+
                     model.set("int", num);
                 }
             }, 2000)
@@ -358,6 +382,8 @@ Ext.define("MemoryUtilPanel", {
             var hwnd = windowsapi.getWindowHwnd(newValue);
             console.log(hwnd)
             this.view.viewModel.set("windowhandle", hwnd)
+            var pid = windowsapi.getWndPid(hwnd);
+            this.view.viewModel.set("pid", pid)
         },
         queryArray: function () {
             console.log(this)
@@ -368,13 +394,18 @@ Ext.define("MemoryUtilPanel", {
             var LoopStep = viewModel.get("LoopStep")
             var arr = [];
             var nSize = 4;
-            var res;
+            var buf = Buffer.alloc(4);
+            //console.log(windowsapi.readProcessMemory(hwnd,0x082395E0,100))
+            var buf;
             var startTime = new Date().getTime()
             for (var i = 0; i < queryArrayNumber; i++) {
-                res = windowsapi.readProcessMemory(hwnd, lpBaseAddress, nSize)
+                console.log(lpBaseAddress);
+                res = windowsapi.readProcessMemory(hwnd, lpBaseAddress, nSize);
+                console.log(res)
+                buf = Buffer.from(res);
                 arr.push({
                     address: lpBaseAddress,
-                    int: res
+                    int: buf.readInt32BE()
                 })
                 lpBaseAddress += 4;
             }
@@ -413,6 +444,11 @@ Ext.define("MemoryUtilPanel", {
                     fieldLabel: "Window Handle",
                     xtype: "textfield",
                     bind: "{windowhandle}"
+                },
+                {
+                    fieldLabel: "PID",
+                    xtype: "textfield",
+                    bind: "{pid}"
                 },
                 {
                     fieldLabel: "Base Address",
@@ -568,7 +604,7 @@ Ext.define("fentengLoginPanel", {
             var child_process = require("child_process")
             console.log(this.view.viewModel)
             var logininfo = this.view.viewModel.data.logininfo;
-            child_process.spawn("D:/Program Files/FancyBoxII Games/newsystem/FTGMOS.exe", [logininfo]);
+            child_process.execFile("D:/Program Files/FancyBoxII Games/newsystem/FTGMOS.exe", [logininfo]);
         },
         submit: function (parm1) {
             var formPanel = this.view;

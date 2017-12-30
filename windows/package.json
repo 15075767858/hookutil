@@ -4,10 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "rebuild":"node-gyp rebuild",
-    "build":"build.bat && node-gyp configure && node-gyp build",
+    "rebuild": "node-gyp rebuild",
+    "build": "build.bat && node-gyp configure && node-gyp build",
     "test": "node-gyp build && node index.js"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+  }
 }
