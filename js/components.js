@@ -1,4 +1,5 @@
 Ext.define("MainPanel", {
+    xtype: "MainPanel",
     extend: "Ext.panel.Panel",
     defaults: {
         closable: true,
@@ -9,6 +10,12 @@ Ext.define("MainPanel", {
             me.add(Ext.create("ByteCompare", {
             }))
         },
+        DrawPanel: function () {
+            var me = this.view;
+            me.add(Ext.create("DrawPanel", {
+            }))
+        },
+
         MemoryUtil: function () {
             var me = this.view;
             me.add(Ext.create("MemoryUtilPanel", {
@@ -88,26 +95,91 @@ Ext.define("MainPanel", {
     },
     tbar: [
         {
-            text: "Byte Compare", handler: "ByteCompare"
-        }, {
-            text: "Memory Util", handler: "MemoryUtil"
-        }, {
-            text: "login",
-            menu: [
-            ]
-        }, {
             text: '阿德啊', value: 1, handler: "loginPanel"
         },
         {
-            text: '阿德呃呃', value: 2, handler: "loginPanel"
+            text: "Memory Util", handler: "MemoryUtil"
+        },
+        {
+            text: "Byte Compare", handler: "ByteCompare"
         }, {
-            text: '新手区网通', value: 3, handler: "loginPanel"
-        }, {
-            text: '新手区电信', value: 4, handler: "loginPanel"
+            text: "login",
+            menu: [
+                {
+                    text: '阿德呃呃', value: 2, handler: "loginPanel"
+                }, {
+                    text: '新手区网通', value: 3, handler: "loginPanel"
+                }, {
+                    text: '新手区电信', value: 4, handler: "loginPanel"
+                }
+            ]
+        },
+        {
+            text: "Draw Panel", handler: "DrawPanel"
         }
+
     ]
 })
+    
+Ext.define("DrawPanel", {
+    extend: "Ext.container.Container",
+    layout: 'absolute',
+    xtype: "DrawPanel",
+    header: false,
+    initComponent: function () {
+        var me = this;
+        me.minification = 11;
+        me.width = 3300 / me.minification;
+        me.height = 3300 / me.minification;
 
+        me.addObj = function (basePoint) {
+            let item = me.down("#" + basePoint)
+            let arr = windowsapi.readProcessMemory(null, basePoint, 0x62)
+            let buf = Buffer.from(arr);
+            var gwtype = buf.readInt8(0x2e)
+            //if (type != 38) {
+            //    return;
+            //}
+            var x = buf.readInt32LE(0x58);
+            var y = buf.readInt32LE(0x5C);
+            if (gwtype <= 0) {
+                return;
+            }
+            console.log(Number(basePoint).toString(16), gwtype, x, y)
+
+            if (x < 800 & y < 800) {
+                //return;
+            }
+            if (item) {
+                item.setPosition(x / me.minification, y / me.minification);
+                item.data = `basePoint=${basePoint} x = ${x} y = ${y} \n` + arr.join(" ")
+            } else {
+                item = Ext.create("Ext.panel.Panel", {
+                    width: 70 / me.minification,
+                    height: 70 / me.minification,
+                    x: x / me.minification,
+                    y: y / me.minification,
+                    bodyStyle: {
+                        //background: 'red',
+                    },
+                    listeners: {
+                        el: {
+                            mouseover: function () {
+                                console.log(item.data)
+                            }
+                        }
+                    }
+                })
+                item.data = `basePoint=${basePoint} x = ${x} y = ${y} \n` + arr.join(" ")
+                me.add(item)
+            }
+
+
+        }
+
+        me.callParent();
+    }
+})
 
 Ext.define("ByteCompare", {
     extend: "Ext.panel.Panel",
@@ -120,7 +192,7 @@ Ext.define("ByteCompare", {
     viewModel: {
         data: {
             basePoint: "12345",
-            searchvalue: "",
+            searchvalue: "nengine.dll+EF8DC",
             readLengh: 20,
             describe: "describe",
             bytes: "DC EF CC 04 D8 F1 8C 04 15 28 00 00 00 00 00 00 90 A8 8D 07 95 5C 26 73 5A 0C 41 14 98 2E 0D 18 28 B0 8E 07 03 00 04 00 01 00 07 00 02 00 08 00 00 00 03 DE 01 00 00 00 E9 FF FF FF DB FF FF FF 20 00 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 99 02 00 00 D9 08 00 00"
@@ -140,6 +212,7 @@ Ext.define("ByteCompare", {
             console.log(me);
             me.add(bytesPanel);
         },
+
         Compare: function () {
             var me = this.view;
             var bps = me.query("BytePanel[isCompare=true]")
@@ -165,20 +238,50 @@ Ext.define("ByteCompare", {
                 })
             }
         },
+        searchMemory: function () {
+            var searchvalue = this.view.viewModel.data.searchvalue;
+
+            if (searchvalue.indexOf("+") >= 0) {
+                var arr = searchvalue.split("+");
+                var hand = Number("0x" + arr[0]);
+                if (isNaN(arr[0])) {
+                    hand = windowsapi.GetModelHandle(arr[0]);
+                }
+                hand = hand + Number("0x" + arr[1])
+            }
+
+            var searchvalue = hand// Number("0x" + this.view.viewModel.data.searchvalue).toString(10);
+            var view = this.view;
+            var bp = view.down("#basePoint");
+            var bpstore = bp.store;
+            bpstore.removeAll();
+            if (!view.dpanel) {
+                view.dpanel = Ext.create("DrawPanel", {
+                })
+                view.add(view.dpanel)
+            }
+            view.dpanel.removeAll();
+            console.log("searchMemory searchvalue=", searchvalue)
+            windowsapi.SearchInt(null, searchvalue, 0, 0, function (v) {
+                view.dpanel.addObj(v);
+                // bpstore.add({
+                //     field1: Number(v).toString(16)
+                // })
+            })
+
+
+        },
         readMemory: function () {
-            var basePoint = this.view.viewModel.data.basePoint;
+            var basePoint = Number("0x" + this.view.viewModel.data.basePoint).toString(10);
             var readLengh = this.view.viewModel.data.readLengh;
+            console.log("readMemory basePoint=", basePoint)
             var arr = windowsapi.readProcessMemory(null, basePoint, readLengh);
             arr = arr.map(function (v, index) {
-                return Number(v).toString(16)
+                return Number(v).toString(16);
             })
             this.view.viewModel.set("bytes", arr.join(" "));
         },
-        search: function () {
-            var searchvalue = this.view.viewModel.data.searchvalue;
-            
-            windowsapi.SearchInt(null, 0x5FEF8DC, 0, 0, function (v) { console.log(Number(v).toString(16)) })
-        }
+
     },
     items: [
         {
@@ -187,7 +290,7 @@ Ext.define("ByteCompare", {
                 {
                     fieldLabel: "search value",
                     xtype: "textfield",
-                    bind: "{searchvalue}"
+                    bind: "{searchvalue}",
                 },
                 {
                     xtype: "button",
@@ -195,6 +298,7 @@ Ext.define("ByteCompare", {
                     handler: "searchMemory"
                 },
                 {
+                    itemId: "basePoint",
                     fieldLabel: "basePoint",
                     xtype: "combo",
                     store: [],
@@ -605,6 +709,10 @@ Ext.define("fentengLoginPanel", {
             console.log(this.view.viewModel)
             var logininfo = this.view.viewModel.data.logininfo;
             child_process.execFile("D:/Program Files/FancyBoxII Games/newsystem/FTGMOS.exe", [logininfo]);
+            this.view.up("MainPanel").add(Ext.create("MemoryUtilPanel", {
+            }))
+            this.view.up("MainPanel").add(Ext.create("ByteCompare", {
+            }))
         },
         submit: function (parm1) {
             var formPanel = this.view;
