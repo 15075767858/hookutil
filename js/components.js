@@ -1,3 +1,4 @@
+﻿
 Ext.define("MainPanel", {
     xtype: "MainPanel",
     extend: "Ext.panel.Panel",
@@ -120,7 +121,7 @@ Ext.define("MainPanel", {
 
     ]
 })
-    
+
 Ext.define("DrawPanel", {
     extend: "Ext.container.Container",
     layout: 'absolute',
@@ -704,6 +705,166 @@ Ext.define("fentengLoginPanel", {
 
     // Reset and Submit buttons
     controller: {
+        stopStrike: function () {
+            if (this.searchInter) {
+                console.log("task delete  .", this.searchInter)
+                clearInterval(this.searchInter);
+                clearInterval(this.strikeInter);
+                delete this.searchInter;
+            } else {
+                console.log("task don't eaxits  .", this.searchInter)
+            }
+        },
+        runStrike: function () {
+            var hwnd = windowsapi.getWindowHwnd("FTGMOS.exe")
+            var realhwnd = windowsapi.GetRealWndHwnd(hwnd)
+            var nengineHandle = windowsapi.GetModelHandle("nengine.dll");
+            var MonsterHand = nengineHandle + 0xEF8DC;
+            var selfX = 0;
+            var selfY = 0;
+            var posX = 0, posY = 0;
+            var distance = 400;
+            var moveDistance = 200;
+            var MonsterArr = [];
+
+            getSelfPos()
+            readWinPos()
+            console.log(hwnd, realhwnd, MonsterHand);
+            if (this.searchInter) {
+                console.log("task already running .", this.searchInter)
+                return;
+            } else {
+                var searchInter = setInterval(searchMonster, 10000);
+                //getPosLengthen() 获取怪物相对坐标
+                var strikeInter = setInterval(strikeInter, 1000);
+                this.strikeInter = strikeInter;
+                this.searchInter = searchInter;
+                console.log("task running .", this.searchInter)
+            }
+
+            function strikeInter() {
+                //console.log(MonsterArr)
+                if (MonsterArr.length == 0) {
+                    return;
+                }
+                getSelfPos()
+                var curMonster;
+                for (var i = 0; i < MonsterArr.length; i++) {
+                    curMonster = readMonsterInfo(MonsterArr[i].point);
+                    if (curMonster) {
+                        break;
+                    }
+                }
+
+                //弧度=角度*(π/180)
+                //我需要 弧度 半径 
+                //先算出弧度 半径和真实坐标是一样 
+                //然后转换到屏幕坐标 posX posY 
+                //
+                var lengthen = 100;
+                //var resPos = getPosLengthen(selfX, selfY, curMonster.x, curMonster.y, curMonster.range, lengthen)
+                //console.log(`战车在屏幕上x=${posX}y=${posY}`, `怪物在屏幕X=${resPos.x}y=${resPos.y}`, "怪物在屏幕上x=", curMonster.x, "y=", curMonster.y, `我x=${selfX}y=${selfY}`);
+                console.log(curMonster);
+                var distanceX = selfX - curMonster.x;
+                var distanceY = selfY - curMonster.y;
+                if (Math.abs(distanceX) > distance) {
+                    if (distanceX > 0) {
+                        windowsapi.SetCursorPos(posX - moveDistance, posY)
+                    }
+                    if (distanceX < 0) {
+                        windowsapi.SetCursorPos(posX + moveDistance, posY)
+                    }
+                    if (distanceY > 0) {
+                        windowsapi.SetCursorPos(posX, posY - moveDistance)
+                    }
+                    if (distanceY < 0) {
+                        windowsapi.SetCursorPos(posX, posY + moveDistance)
+                    }
+                    robotjs.mouseClick("right")
+                } else {
+                    windowsapi.SetCursorPos(posX - distanceX, posY - distanceY)
+                    //robotjs.mouseClick("click")
+                }
+                //判断血量 低于一定程度禁止移动 0报警 能量低于一定程度自动吃能量包
+                //把战车跨地形移动的地址找到
+
+                console.log(`pos x=${posX}y=${posY} self x=${selfX}y=${selfY} mon x=${curMonster.x} y=${curMonster.y}`);
+                console.log(posX - (selfX - curMonster.x), posY - (selfY - curMonster.y))
+
+                //windowsapi.SetCursorPos(resPos.x - posX, resPos.y - posY)
+            }
+            function readMonsterInfo(point) {
+                var buf = Buffer.from(windowsapi.readProcessMemory(null, point, 0x60));
+                var gwtype = buf.readInt8(0x2e);
+                if (gwtype <= 1) {
+                    return null;
+                }
+                var gwtype2c = buf.readUInt8(0x2c);
+                if (gwtype2c == 0xFF) {
+                    return null;
+                }
+                var gwtype2e = buf.readInt8(0x2e);
+                var gwtype38 = buf.readInt8(0x38);
+                var gwtype40 = buf.readInt8(0x40);
+                var gwtype5d = buf.readInt8(0x5d);
+                var x = buf.readInt32LE(0x58);
+                var y = buf.readInt32LE(0x5C);
+                // var a = Math.pow(selfX - x, 2);
+                // var b = Math.pow(selfY - y, 2);
+                // var range = Math.sqrt(a + b);
+                var range = Math.sqrt(Math.pow(selfX - x, 2) + Math.pow(selfY - y, 2));
+                if (range < 100) {
+                    return null;
+                }
+                return {
+                    point, gwtype, gwtype2c,gwtype2e, gwtype38, gwtype40, gwtype5d, x, y, range
+                }
+            }
+            function searchMonster() {
+                var startTime = new Date().getTime();
+                var count = 0;
+                getSelfPos();
+                readWinPos();
+                MonsterArr = [];
+                windowsapi.SearchInt(null, MonsterHand, 0x06000000, 0x10000000, function (point) {
+                    var monsterInfo = readMonsterInfo(point);
+                    if (monsterInfo) {
+                        count++;
+                        MonsterArr.push(monsterInfo)
+                    }
+                    //console.log("value = ",Number(v).toString(16))
+                })
+                MonsterArr.sort(function (a, b) {
+                    return a.range - b.range;
+                })
+                MonsterArr.pop();
+                console.log(`${selfX} ${selfY} `, 'count = ', count, "  ", (new Date().getTime() - startTime), 'ms')
+                console.table(MonsterArr)
+            }
+            function getSelfPos() {
+                var selfHandle = Buffer.from(windowsapi.readProcessMemory(null, nengineHandle + 0x1196AC, 4)).readUInt32LE();
+                var buf = Buffer.from(windowsapi.readProcessMemory(null, selfHandle + 8, 8));
+                selfX = buf.readInt32LE(0);
+                selfY = buf.readInt32LE(4);
+            }
+            function readWinPos() {
+                var winRectInfo = windowsapi.GetWindowRect(hwnd);
+                posX = winRectInfo.x + (winRectInfo.width / 2);
+                posY = winRectInfo.y + (winRectInfo.height / 2) - 30;
+                console.log(winRectInfo);
+
+            }
+            function getPosLengthen(mx, my, gx, gy, range, lengthen) {
+                var w = mx - gx;
+                var h = my - gy;
+                var r = Math.sqrt(Math.pow(w, 2) + Math.pow(h, 2));
+                var cos = w / r;
+                var sin = h / r;
+                var x = cos * (r + lengthen);
+                var y = sin * (r + lengthen);
+                return { x, y }
+            }
+        },
         login: function () {
             var child_process = require("child_process")
             console.log(this.view.viewModel)
@@ -734,21 +895,31 @@ Ext.define("fentengLoginPanel", {
             }
         }
     },
-    buttons: [{
-        text: 'Reset',
-        hidden: true,
-        handler: function () {
-            this.up('form').getForm().reset();
-        }
-    },
-    {
-        text: "login game",
-        handler: "login"
-    },
-    {
-        text: 'Submit',
-        formBind: true, //only enabled once the form is valid
-        disabled: true,
-        handler: "submit"
-    }],
+    buttons: [
+        {
+            text: 'stop strike',
+            handler: "stopStrike"
+        },
+        {
+            text: 'run strike',
+            handler: "runStrike"
+        },
+        "->",
+        {
+            text: 'Reset',
+            hidden: true,
+            handler: function () {
+                this.up('form').getForm().reset();
+            }
+        },
+        {
+            text: "login game",
+            handler: "login"
+        },
+        {
+            text: 'Submit',
+            formBind: true, //only enabled once the form is valid
+            disabled: true,
+            handler: "submit"
+        }],
 })

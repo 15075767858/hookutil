@@ -46,6 +46,9 @@
       "icon": "build/icons"
     }
   },
-  "devDependencies": {
+  "devDependencies": {},
+  "dependencies": {
+    "iconv": "^2.3.0",
+    "robotjs": "^0.4.7"
   }
 }

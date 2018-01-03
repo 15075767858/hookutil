@@ -22,7 +22,9 @@ void Method(const FunctionCallbackInfo<Value> &args)
     Isolate *isolate = args.GetIsolate();
     //hello=arg0;
     v8::String::Utf8Value Utf8Value(args[0]);
+
     hello = Utf8Value.operator*();
+    printf(hello);
     count++;
     args.GetReturnValue().Set(String::NewFromUtf8(isolate, hello));
 }
@@ -50,11 +52,61 @@ void GetWndHwnd(const FunctionCallbackInfo<Value> &args)
     //printf(" %d %d %d \n ",hWnd,hWnd1,hWnd2);
     args.GetReturnValue().Set((long)hWnd);
 }
+// void GetWindowRect(const FunctionCallbackInfo<Value> &args)
+// {
+//     Isolate *isolate = args.GetIsolate();
+//     RECT rect;
+//     Local<Number> args0 = NULL;
+//     if (args[0]->IsNull())
+//     {
+//         GetWindowRect(hwnd2, &rect);
+//     }
+// }
+void MySetWindowTextA(const FunctionCallbackInfo<Value> &args)
+{
+    Local<Number> arg0 = args[0]->ToNumber();
+    HWND hWnd = (HWND)(long)arg0->Value();
+    Local<String> arg1 = args[1]->ToString();
+    v8::String::Utf8Value Utf8Value(arg1);
+    char *str = Utf8Value.operator*();
+    printf(str);
+    args.GetReturnValue().Set(SetWindowTextA(hWnd, str));
+}
+
+void MyGetWindowTextA(const FunctionCallbackInfo<Value> &args)
+{
+    Isolate *isolate = args.GetIsolate();
+    Local<Number> arg0 = args[0]->ToNumber();
+    HWND hWnd = (HWND)(long)arg0->Value();
+    //Local<String> arg1 = args[1]->ToString();
+    //v8::String::Utf8Value Utf8Value(arg1);
+    //char *str = Utf8Value.operator*();
+    const int size = 100;
+    char str[size];
+    GetWindowTextA(hWnd, str, sizeof(str));
+    Local<Array> arr = Array::New(isolate, size);
+    printf(&str[0]);
+    args.GetReturnValue().Set(String::NewFromUtf8(isolate, &str[0]));
+}
+void MyGetWindowRect(const FunctionCallbackInfo<Value> &args)
+{
+    Isolate *isolate = args.GetIsolate();
+    Local<Number> arg0 = args[0]->ToNumber();
+    HWND hWnd = (HWND)(long)arg0->Value();
+    RECT rect;
+    GetWindowRect(hWnd, &rect);
+    Local<Object> obj = Object::New(isolate);
+    obj->Set(String::NewFromUtf8(isolate, "x"), Number::New(isolate, rect.left));
+    obj->Set(String::NewFromUtf8(isolate, "y"), Number::New(isolate, rect.top));
+    obj->Set(String::NewFromUtf8(isolate, "width"), Number::New(isolate, rect.right - rect.left));
+    obj->Set(String::NewFromUtf8(isolate, "height"), Number::New(isolate, rect.bottom - rect.top));
+    args.GetReturnValue().Set(obj);
+}
 void GetRealWndHwnd(const FunctionCallbackInfo<Value> &args)
 {
     Isolate *isolate = args.GetIsolate();
     Local<Number> arg0 = args[0]->ToNumber();
-    HWND hWnd = (HWND)(int)arg0->Value();
+    HWND hWnd = (HWND)(long)arg0->Value();
     char str[20];
     GetWindowTextA(hWnd, str, sizeof(str));
     HWND hWnd1 = FindWindowExA(NULL, NULL, NULL, &str[0]);
@@ -152,16 +204,40 @@ void RunCallback(const FunctionCallbackInfo<Value> &args)
     cb->Call(Null(isolate), argc, argv);
     cb->Call(Null(isolate), argc, argv);
 }
+void MySetCursorPos(const FunctionCallbackInfo<Value> &args)
+{
+    Isolate *isolate = args.GetIsolate();
+    Local<Number> arg0 = args[0]->ToNumber();
+    Local<Number> arg1 = args[1]->ToNumber();
+    int X = arg0->Value();
+    int Y = arg1->Value();
+    args.GetReturnValue().Set(SetCursorPos(X, Y));
+}
+void MouseRClick(const FunctionCallbackInfo<Value> &args)
+{
+    Isolate *isolate = args.GetIsolate();
+    mouse_event(MOUSEEVENTF_XDOWN, 0, 0, 0, 0);
+     Sleep(20);
+    mouse_event(MOUSEEVENTF_XUP, 0, 0, 0, 0);
+    args.GetReturnValue().Set(0);
+}
 void init(Local<Object> exports)
 {
     NODE_SET_METHOD(exports, "input", Method);
     NODE_SET_METHOD(exports, "output", Method1);
     NODE_SET_METHOD(exports, "RunCallback", RunCallback);
     NODE_SET_METHOD(exports, "getWindowHwnd", GetWndHwnd);
+    NODE_SET_METHOD(exports, "GetRealWndHwnd", GetRealWndHwnd);
+    NODE_SET_METHOD(exports, "GetWindowRect", MyGetWindowRect);
+    NODE_SET_METHOD(exports, "GetWindowTextA", MyGetWindowTextA);
+    NODE_SET_METHOD(exports, "SetWindowTextA", MySetWindowTextA);
+    NODE_SET_METHOD(exports, "SetCursorPos", MySetCursorPos);
     NODE_SET_METHOD(exports, "getWndPid", getWndPid);
     NODE_SET_METHOD(exports, "readProcessMemory", MyReadProcessMemory);
     NODE_SET_METHOD(exports, "SearchInt", SearchInt);
     NODE_SET_METHOD(exports, "GetModelHandle", GetModelHandle);
+    NODE_SET_METHOD(exports, "GetWindowTextA", MyGetWindowTextA);
+    NODE_SET_METHOD(exports, "MouseRClick", MouseRClick);
 }
 
 NODE_MODULE(NODE_GYP_MODULE_NAME, init)
